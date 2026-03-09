@@ -12,6 +12,49 @@ function q() {
 function info() {
 	return <HTMLElement>document.getElementById('i');
 }
+function themeToggle() {
+	return <HTMLButtonElement>document.getElementById('theme-toggle');
+}
+function preferredTheme() {
+	try {
+		let t = window.localStorage.getItem('theme');
+		if (t === 'light' || t === 'dark') {
+			return t;
+		}
+	} catch (error) {
+	}
+	if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+		return 'dark';
+	}
+	return 'light';
+}
+function applyTheme(theme: string) {
+	document.documentElement.setAttribute('data-theme', theme);
+	let t = themeToggle();
+	if (!t) {
+		return;
+	}
+	let dark = theme === 'dark';
+	t.textContent = dark ? '☀️' : '🌙';
+	t.title = dark ? 'Switch to light mode' : 'Switch to dark mode';
+	t.setAttribute('aria-label', dark ? 'Switch to light mode' : 'Switch to dark mode');
+}
+function setupThemeToggle() {
+	applyTheme(preferredTheme());
+	let t = themeToggle();
+	if (!t) {
+		return;
+	}
+	t.addEventListener('click', function () {
+		let current = document.documentElement.getAttribute('data-theme');
+		let next = (current === 'dark') ? 'light' : 'dark';
+		applyTheme(next);
+		try {
+			window.localStorage.setItem('theme', next);
+		} catch (error) {
+		}
+	});
+}
 function working() {
 	info().innerHTML = '<p class=w>Working <img class=l src="/img/loading.gif"></p>';
 }
@@ -153,6 +196,7 @@ window['epub'] = epub;
 
 window.onload = setup;
 function setup() {
+	setupThemeToggle();
 	if(navigator.userAgent.indexOf('ooglebot') >= 0) { return; }
 	if(navigator.userAgent.indexOf('BingPreview') >= 0) { return; }
 	if(navigator.userAgent.indexOf('bingbot/') >= 0) { return; }

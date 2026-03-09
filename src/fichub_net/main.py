@@ -1,6 +1,7 @@
 from typing import TYPE_CHECKING, Any, cast
 import contextlib
 from enum import IntEnum
+from http import HTTPStatus
 import json
 import math
 from pathlib import Path
@@ -10,6 +11,7 @@ import time
 
 from flask import (
     Flask,
+    Response,
     make_response,
     redirect,
     render_template,
@@ -27,6 +29,7 @@ from fichub_net import ax, ebook, es, util
 from fichub_net.db import FicBlacklist, FicInfo, RequestLog, RequestSource
 from fichub_net.ip_tag import TAGGED_IP_RANGES, ip_is_datacenter, load_ip_ranges
 from fichub_net.limiter import Limiter
+from fichub_net.openapi_spec import build_openapi_spec
 from fichub_net.rl_conf import (
     DYNAMIC_RATE_LIMIT,
     IP_TAG_SOURCES,
@@ -38,15 +41,15 @@ from fichub_net.rl_conf import (
 
 app = Flask(__name__, static_url_path="", static_folder="../../static/")
 
-NODE_NAME = "orion"
-CACHE_BUSTER = "26"
-CSS_CACHE_BUSTER = CACHE_BUSTER
-JS_CACHE_BUSTER = CACHE_BUSTER
-CURRENT_CSS = ""  # note: empty string is treated as None
+NODE_NAME: str = "orion"
+CACHE_BUSTER: str = "26"
+CSS_CACHE_BUSTER: str = CACHE_BUSTER
+JS_CACHE_BUSTER: str = CACHE_BUSTER
+CURRENT_CSS: str = ""  # note: empty string is treated as None
 
 # may treat requests from these sources as being proxied for a user
 # gil: 142.132.180.201
-TRUSTED_UPSTREAMS = {
+TRUSTED_UPSTREAMS: set[str] = {
     "142.132.180.201",
 }
 
@@ -69,7 +72,7 @@ class WebError(IntEnum):
     internal_strange = -10
 
 
-error_messages = {
+error_messages: dict[WebError, str] = {
     WebError.success: "success",
     WebError.no_query: "no query",
     WebError.invalid_etype: "invalid etype",
@@ -85,10 +88,28 @@ error_messages = {
 
 
 def get_err(err: WebError, extra: dict[str, Any] | None = None) -> dict[str, Any]:
-    base = {"err": int(err), "msg": error_messages[err]}
+    base: dict[str, Any] = {"err": int(err), "msg": error_messages[err]}
     if extra is not None:
         base.update(extra)
     return base
+
+
+def api_error_http_status(err: int) -> int:
+    if err == int(WebError.no_query) or err == int(WebError.invalid_etype):
+        return int(HTTPStatus.BAD_REQUEST)
+    if err == int(WebError.greylisted):
+        return int(HTTPStatus.FORBIDDEN)
+    if err == int(WebError.internal_datacenter) or err == int(WebError.internal_strange):
+        return int(HTTPStatus.FORBIDDEN)
+    if err == int(WebError.ax_dead) or err == int(WebError.lookup_failed):
+        return int(HTTPStatus.SERVICE_UNAVAILABLE)
+    if err == int(WebError.export_failed):
+        return int(HTTPStatus.BAD_GATEWAY)
+    if err == int(WebError.ensure_failed) or err == int(WebError.internal):
+        return int(HTTPStatus.INTERNAL_SERVER_ERROR)
+    if err >= 0:
+        return int(HTTPStatus.OK)
+    return int(HTTPStatus.INTERNAL_SERVER_ERROR)
 
 
 @app.errorhandler(404)
@@ -106,39 +127,44 @@ def api_landing() -> ResponseReturnValue:
     return render_template("api.html")
 
 
+@app.route("/api/openapi.json", methods=["GET"])
+def api_openapi() -> dict[str, Any]:
+    return build_openapi_spec(request.url_root.rstrip("/"))
+
+
 @app.route("/")
 def index() -> ResponseReturnValue:
-    url_id = request.args.get("id", "").strip()
+    url_id: str = request.args.get("id", "").strip()
     return index_impl(url_id, False)
 
 
 def index_impl(url_id: str, legacy: bool) -> ResponseReturnValue:
-    from_pw = request.args.get("from_pw", "").strip()
+    from_pw: str = request.args.get("from_pw", "").strip()
 
-    blacklisted = False
-    greylisted = False
-    links = []
-    fic_info = None
+    blacklisted: bool = False
+    greylisted: bool = False
+    links: list[Any] = []
+    fic_info: Any = None
     with contextlib.suppress(Exception):
         if legacy and len(url_id) > 1:
-            fis = FicInfo.select(url_id)
+            fis: list[FicInfo] = FicInfo.select(url_id)
             if len(fis) == 1:
                 blacklisted = FicBlacklist.blacklisted(url_id)
                 greylisted = FicBlacklist.greylisted(url_id)
                 fic_info = fis[0]
 
-                epub_rl = RequestLog.most_recent_by_url_id("epub", url_id)
+                epub_rl: RequestLog | None = RequestLog.most_recent_by_url_id("epub", url_id)
                 if epub_rl is None:
                     # we always generate the epub first, so if we don't have it something went
                     # horribly wrong
                     msg = "uh oh"
                     raise MissingExportError(msg)
 
-                slug = ebook.build_file_slug(fic_info.title, fic_info.author, url_id)
-                eh = epub_rl.export_file_hash
+                slug: str = ebook.build_file_slug(fic_info.title, fic_info.author, url_id)
+                eh: str | None = epub_rl.export_file_hash
                 if eh is None:
                     eh = "unknown"
-                epub_url = url_for(
+                epub_url: str = url_for(
                     "get_cached_export",
                     etype="epub",
                     url_id=url_id,
@@ -150,11 +176,11 @@ def index_impl(url_id: str, legacy: bool) -> ResponseReturnValue:
                 for etype in ebook.EXPORT_TYPES:
                     if etype == "epub":
                         continue
-                    pe = ebook.find_existing_export(etype, url_id, eh)
+                    pe: tuple[Path, str] | None = ebook.find_existing_export(etype, url_id, eh)
                     if pe is None:
                         # for any etype that hasn't already been exported or is out of date,
                         # create a (re)generate link
-                        link = url_for(
+                        link: str = url_for(
                             "get_cached_export_partial",
                             etype=etype,
                             url_id=url_id,
@@ -164,9 +190,9 @@ def index_impl(url_id: str, legacy: bool) -> ResponseReturnValue:
                         links.append((etype, False, link))
                     else:
                         # otherwise build the direct link
-                        fname = slug + ebook.EXPORT_SUFFIXES[etype]
-                        fhash = pe[1]
-                        link = url_for(
+                        fname: str = slug + ebook.EXPORT_SUFFIXES[etype]
+                        fhash: str = pe[1]
+                        link: str = url_for(
                             "get_cached_export",
                             etype=etype,
                             url_id=url_id,
@@ -178,7 +204,7 @@ def index_impl(url_id: str, legacy: bool) -> ResponseReturnValue:
     if greylisted:
         links = []
 
-    resp = make_response(
+    resp: Response = make_response(
         render_template(
             "index.html",
             from_pw=from_pw,
@@ -200,49 +226,47 @@ def changes() -> ResponseReturnValue:
 
 @app.route("/fic/<url_id>")
 def fic_info(url_id: str) -> ResponseReturnValue:
-    all_info = FicInfo.select(url_id)
+    all_info: list[FicInfo] = FicInfo.select(url_id)
     if len(all_info) < 1:
         # entirely unknown fic, 404
         return page_not_found(NotFound())
-    fic_info = all_info[0]
+    fic_info: FicInfo = all_info[0]
 
     return redirect(url_for("index", q=fic_info.source, id=fic_info.id))
 
 
 @app.route("/cache/", defaults={"_page": 1})
 @app.route("/cache/<int:_page>")
-def cache_listing_deprecated(_page: int) -> ResponseReturnValue:
+def cache_listing_deprecated() -> ResponseReturnValue:
     return redirect(url_for("index"))
 
 
 @app.route("/cache/today/", defaults={"_page": 1})
 @app.route("/cache/today/<int:_page>")
-def cache_listing_today(_page: int) -> ResponseReturnValue:
+def cache_listing_today() -> ResponseReturnValue:
     return redirect(url_for("index"))
 
 
 @app.route("/cache/<int:_year>/<int:_month>/<int:_day>/", defaults={"_page": 1})
 @app.route("/cache/<int:_year>/<int:_month>/<int:_day>/<int:_page>")
-def cache_listing(
-    _year: int, _month: int, _day: int, _page: int
-) -> ResponseReturnValue:
+def cache_listing() -> ResponseReturnValue:
     return redirect(url_for("index"))
 
 
 @app.route("/popular/", defaults={"_page": 1})
 @app.route("/popular/<int:_page>")
-def popular_listing(_page: int) -> ResponseReturnValue:
+def popular_listing() -> ResponseReturnValue:
     return render_template("popular_outmoded.html")
 
 
 @app.route("/search/author/<_q>")
-def search_author(_q: str) -> ResponseReturnValue:
+def search_author() -> ResponseReturnValue:
     return redirect(url_for("index"))
 
 
 def try_ensure_export(etype: str, url_id: str) -> str | None:
-    key = f"{etype}_fname"
-    res = ensure_export(etype, url_id, url_id)
+    key: str = f"{etype}_fname"
+    res: dict[str, Any] = ensure_export(etype, url_id, url_id)
     if "err" in res or key not in res:
         return None
     if res[key] is None or isinstance(res[key], Path):
@@ -253,8 +277,8 @@ def try_ensure_export(etype: str, url_id: str) -> str | None:
 
 
 def get_request_source() -> RequestSource:
-    automated = request.args.get("automated", None) == "true"
-    remote_addr = request.remote_addr
+    automated: bool = request.args.get("automated", None) == "true"
+    remote_addr: str | None = request.remote_addr
     if remote_addr is not None and remote_addr in TRUSTED_UPSTREAMS:
         remote_addr = request.headers.get("X-Forwarded-For", remote_addr)
     if remote_addr is None:
@@ -273,7 +297,7 @@ def create_export(
     if etype in ["mobi", "pdf"]:
         return ebook.convert_epub(meta, chapters, etype)
 
-    msg = f"err: unknown etype: {etype}"
+    msg: str = f"err: unknown etype: {etype}"
     raise ebook.InvalidETypeError(msg)
 
 
@@ -282,9 +306,9 @@ def ensure_export(etype: str, query: str, url_id: str | None = None) -> dict[str
     if etype not in ebook.EXPORT_TYPES:
         return get_err(WebError.invalid_etype, {"fn": "ensure_export", "etype": etype})
 
-    source = get_request_source()
+    source: RequestSource = get_request_source()
 
-    authorization = request.headers.get("Authorization", None)
+    authorization: str | None = request.headers.get("Authorization", None)
     if authorization is None:
         if (
             source.description not in LIMIT_UPSTREAMS
@@ -292,16 +316,16 @@ def ensure_export(etype: str, query: str, url_id: str | None = None) -> dict[str
         ):
             LIMIT_UPSTREAMS[source.description] = 0.1
         if source.description in LIMIT_UPSTREAMS:
-            v = LIMIT_UPSTREAMS[source.description]
-            o = LIMIT_UPSTREAMS_EXTRA.get(source.description, 0.0)
-            limit_d = 1 + (random.random() * v) + o
+            v: float = LIMIT_UPSTREAMS[source.description]
+            o: float = LIMIT_UPSTREAMS_EXTRA.get(source.description, 0.0)
+            limit_d: float = 1 + (random.random() * v) + o
             app.logger.info(
                 f"  limiting {source.description}: v={v:0.3} o={o:0.3} d={limit_d:0.3} ts={time.time()}"
             )
             time.sleep(limit_d)
 
-    notes = []
-    ax_alive = ax.alive()
+    notes: list[str] = []
+    ax_alive: bool = ax.alive()
     if not ax_alive:
         app.logger.info("ensure_export: ax is not alive :(")
         if url_id is None or len(FicInfo.select(url_id)) != 1:
@@ -309,9 +333,9 @@ def ensure_export(etype: str, query: str, url_id: str | None = None) -> dict[str
         # otherwise fallthrough
         notes += ["backend api is down; results may be stale"]
 
-    init_time_ms = int(time.time() * 1000)
-    meta = None
-    lres = None
+    init_time_ms: int = int(time.time() * 1000)
+    meta: FicInfo | None = None
+    lres: dict[str, Any] | None = None
     try:
         if not ax_alive:
             meta = FicInfo.select(url_id)[0]
@@ -339,23 +363,25 @@ def ensure_export(etype: str, query: str, url_id: str | None = None) -> dict[str
 
         return get_err(WebError.lookup_failed)
 
-    meta_dict = meta.to_json()
+    meta_dict: dict[str, Any] = meta.to_json()
 
     info_time_ms = int(time.time() * 1000)
-    info_request_ms = info_time_ms - init_time_ms
+    info_request_ms: int = info_time_ms - init_time_ms
 
     # attempt to find previous epub export if it exists...
     try:
-        existing_epub = None
+        existing_epub: tuple[Path, str] | None = None
         if meta.content_hash is not None:
             existing_epub = ebook.find_existing_export(
                 "epub", meta.id, meta.content_hash
             )
 
-        existing_export = None
+        existing_export: tuple[Path, str] | None = None
         if etype == "epub":
             existing_export = existing_epub
         elif existing_epub is not None:
+            _epub_fname: Path
+            ehash: str
             _epub_fname, ehash = existing_epub
             existing_export = ebook.find_existing_export(etype, meta.id, ehash)
 
@@ -363,12 +389,14 @@ def ensure_export(etype: str, query: str, url_id: str | None = None) -> dict[str
             app.logger.info(
                 f"ensure_export({etype}, {query}): attempting to reuse previous export for {meta.id}"
             )
+            fname: Path
+            fhash: str
             fname, fhash = existing_export
-            meta_string = ebook.metadata_string(meta)
+            meta_string: str = ebook.metadata_string(meta)
 
-            slug = ebook.build_file_slug(meta.title, meta.author, meta.id)
-            suff = ebook.EXPORT_SUFFIXES[etype]
-            export_url = url_for(
+            slug: str = ebook.build_file_slug(meta.title, meta.author, meta.id)
+            suff: str = ebook.EXPORT_SUFFIXES[etype]
+            export_url: str = url_for(
                 "get_cached_export",
                 etype=etype,
                 url_id=meta.id,
@@ -377,7 +405,7 @@ def ensure_export(etype: str, query: str, url_id: str | None = None) -> dict[str
             )
 
             end_time_ms = int(time.time() * 1000)
-            export_ms = end_time_ms - info_time_ms
+            export_ms: int = end_time_ms - info_time_ms
 
             RequestLog.insert(
                 source,
@@ -415,14 +443,14 @@ def ensure_export(etype: str, query: str, url_id: str | None = None) -> dict[str
     try:
         # TODO: we could be timing this too...
         meta_string = ebook.metadata_string(meta)
-        chapters = ax.fetch_chapters(meta)
+        chapters: dict[int, ax.Chapter] = ax.fetch_chapters(meta)
 
         # actually do the export
         fname, fhash = create_export(etype, meta, chapters)
 
-        slug = ebook.build_file_slug(meta.title, meta.author, meta.id)
-        suff = ebook.EXPORT_SUFFIXES[etype]
-        export_url = url_for(
+        slug: str = ebook.build_file_slug(meta.title, meta.author, meta.id)
+        suff: str = ebook.EXPORT_SUFFIXES[etype]
+        export_url: str = url_for(
             "get_cached_export",
             etype=etype,
             url_id=meta.id,
@@ -431,7 +459,7 @@ def ensure_export(etype: str, query: str, url_id: str | None = None) -> dict[str
         )
 
         end_time_ms = int(time.time() * 1000)
-        export_ms = end_time_ms - info_time_ms
+        export_ms: int = end_time_ms - info_time_ms
 
         RequestLog.insert(
             source,
@@ -458,7 +486,7 @@ def ensure_export(etype: str, query: str, url_id: str | None = None) -> dict[str
         }
     except Exception as e:
         end_time_ms = int(time.time() * 1000)
-        export_ms = end_time_ms - info_time_ms
+        export_ms: int = end_time_ms - info_time_ms
         RequestLog.insert(
             source,
             etype,
@@ -492,11 +520,11 @@ def ensure_export(etype: str, query: str, url_id: str | None = None) -> dict[str
 
 
 def legacy_cache_redirect(etype: str, fname: str) -> ResponseReturnValue:
-    fhash = request.args.get("h", None)
-    url_id = fname
+    fhash: str | None = request.args.get("h", None)
+    url_id: str = fname
     if url_id.find("-") >= 0:
         url_id = url_id.split("-")[-1]
-    suff = ebook.EXPORT_SUFFIXES[etype]
+    suff: str = ebook.EXPORT_SUFFIXES[etype]
     url_id = url_id.removesuffix(suff)
     if fhash is None:
         return redirect(
@@ -531,8 +559,8 @@ def get_cached_export(etype: str, url_id: str, fname: str) -> ResponseReturnValu
         # if this is an unsupported export type, 404
         return page_not_found(NotFound())
 
-    mimetype = ebook.EXPORT_MIMETYPES[etype]
-    suff = ebook.EXPORT_SUFFIXES[etype]
+    mimetype: str = ebook.EXPORT_MIMETYPES[etype]
+    suff: str = ebook.EXPORT_SUFFIXES[etype]
     if not fname.endswith(suff):
         # we have a request for the wrong extension, 404
         return page_not_found(NotFound())
@@ -545,11 +573,13 @@ def get_cached_export(etype: str, url_id: str, fname: str) -> ResponseReturnValu
         # blacklisted fic, 404
         return render_template("fic_info_blacklist.html"), 404
 
-    fhash = request.args.get("h", None)
+    fhash: str | None = request.args.get("h", None)
+    fdir: Path
+    sfdir: Path
     fdir, sfdir = ebook.build_export_path(etype, url_id)
     if fhash is not None:
         # if the request is for a specific slug, try to serve it directly
-        rname = fname
+        rname: str = fname
         fname = f"{fhash}{suff}"
         if not (fdir / fname).is_file() and (sfdir / fname).is_file():
             fdir.mkdir(parents=True)
@@ -566,13 +596,13 @@ def get_cached_export(etype: str, url_id: str, fname: str) -> ResponseReturnValu
         # fall through...
 
     # otherwise find the most recent export and give them that
-    all_info = FicInfo.select(url_id)
+    all_info: list[FicInfo] = FicInfo.select(url_id)
     if len(all_info) < 1:
         # entirely unknown fic, 404
         return page_not_found(NotFound())
-    fic_info = all_info[0]
-    slug = ebook.build_file_slug(fic_info.title, fic_info.author, url_id)
-    rl = RequestLog.most_recent_by_url_id(etype, url_id)
+    fic_info: FicInfo = all_info[0]
+    slug: str = ebook.build_file_slug(fic_info.title, fic_info.author, url_id)
+    rl: RequestLog | None = RequestLog.most_recent_by_url_id(etype, url_id)
     if rl is None:
         return page_not_found(NotFound())
 
@@ -599,7 +629,7 @@ def get_cached_export_partial(etype: str, url_id: str) -> ResponseReturnValue:
         return page_not_found(NotFound())
 
     # otherwise we have a url_id we need to export
-    fname = try_ensure_export(etype, url_id)
+    fname: str | None = try_ensure_export(etype, url_id)
     if fname is None:
         # if we failed to generate the export, 503
         return render_template("503_janus.html"), 503
@@ -629,7 +659,7 @@ def get_fixits(q: str) -> list[str]:
         ]
 
     with contextlib.suppress(Exception):
-        fis = es.search(q, limit=15)
+        fis: list[FicInfo] = es.search(q, limit=15)
         for fi in fis:
             fixits += [
                 f"<br/>did you mean <a href=/fic/{fi.id}>{fi.title} by {fi.author}</a>?"
@@ -639,7 +669,7 @@ def get_fixits(q: str) -> list[str]:
 
 
 def get_limiter(key: str) -> Limiter:
-    limiter = Limiter.select(key)
+    limiter: Limiter | None = Limiter.select(key)
     if limiter is not None:
         return limiter
 
@@ -647,13 +677,13 @@ def get_limiter(key: str) -> Limiter:
 
 
 def maybe_limit_request() -> tuple[Limiter | None, ResponseReturnValue | None]:
-    source = get_request_source()
+    source: RequestSource = get_request_source()
 
-    source_limiter = None
+    source_limiter: Limiter | None = None
 
     authorization = request.headers.get("Authorization", None)
     if authorization is not None:
-        token = ""
+        token: str = ""
         if authorization.startswith("Bearer "):
             token = authorization[len("Bearer ") :]
         source_limiter = Limiter.select(f"token:{token}")
@@ -669,14 +699,14 @@ def maybe_limit_request() -> tuple[Limiter | None, ResponseReturnValue | None]:
                 ),
             )
 
-    authorized = source_limiter is not None
+    authorized: bool = source_limiter is not None
     authorized |= source.description in NO_LIMIT_UPSTREAMS
 
     # If we don't have a source_limiter based on the Authorization header,
     # default to one based on the remote address.
     if source_limiter is None:
         source_limiter = get_limiter(f"remote:{source.description}")
-        user_agent = request.headers.get("User-Agent", "")
+        user_agent: str = request.headers.get("User-Agent", "")
         if user_agent.lower().find("headlesschrome") >= 0:
             app.logger.info(
                 f"HEADLESSCHROME: lowering params for: {source.description}"
@@ -684,30 +714,30 @@ def maybe_limit_request() -> tuple[Limiter | None, ResponseReturnValue | None]:
             source_limiter = source_limiter.set_parameters(3, 1.0 / 99.0)
 
     if DYNAMIC_RATE_LIMIT:
-        source_ra = source_limiter.retry_after(1.0)
+        source_ra: float | None = source_limiter.retry_after(1.0)
         if source_ra is not None:
             source_limiter.tick(0.200)
             source_ra = source_limiter.retry_after(1.0)
         if source_ra is not None:
-            source_ra_v = math.ceil(source_ra + 1)
+            source_ra_v: int = math.ceil(source_ra + 1)
             app.logger.info(
                 f"rate limiting {source.description}, retry after={source_ra_v}"
             )
 
-            resp = make_response(
+            resp: Response = make_response(
                 {"err": -429, "msg": "too many requests", "retry_after": source_ra_v},
                 429,
             )
             resp.headers["Retry-After"] = str(source_ra_v)
             return (source_limiter, resp)
 
-        global_limiter = get_limiter("global")
-        global_ra = global_limiter.retry_after(1.0)
+        global_limiter: Limiter = get_limiter("global")
+        global_ra: float | None = global_limiter.retry_after(1.0)
         if global_ra is not None:
-            global_ra_v = math.ceil(global_ra + 1)
+            global_ra_v: int = math.ceil(global_ra + 1)
             app.logger.info(f"rate limiting global, retry after={global_ra_v}")
 
-            resp = make_response(
+            resp: Response = make_response(
                 {
                     "err": -429,
                     "msg": "too many requests (g)",
@@ -721,7 +751,7 @@ def maybe_limit_request() -> tuple[Limiter | None, ResponseReturnValue | None]:
     # TODO: instead of blocking outright, insert ip into ip tag table and set
     # the limit to something much lower? Share a limit across azure/DO address
     # space?
-    datacenter = ip_is_datacenter(source.description)
+    datacenter: str | None = ip_is_datacenter(source.description)
 
     # If we haven't seen a valid Authorization header, block anything that looks
     # like an autonomous network
@@ -739,7 +769,7 @@ def maybe_limit_request() -> tuple[Limiter | None, ResponseReturnValue | None]:
         return (source_limiter, get_err(WebError.internal_strange))
 
     # TODO: both the testsuite and some annoying mass crawlers >_>
-    automated = request.args.get("automated", None) == "true"
+    automated: bool = request.args.get("automated", None) == "true"
     if automated:
         app.logger.info(f"BLOCKING DATACENTER IP: automated=true {source.description}")
         return (source_limiter, get_err(WebError.internal_datacenter))
@@ -749,13 +779,17 @@ def maybe_limit_request() -> tuple[Limiter | None, ResponseReturnValue | None]:
 
 @app.route("/api/v0/epub", methods=["GET"])
 def api_v0_epub() -> Any:
+    source_limiter: Limiter | None
+    limit_resp: ResponseReturnValue | None
     source_limiter, limit_resp = maybe_limit_request()
     if limit_resp is not None:
+        if isinstance(limit_resp, dict) and "err" in limit_resp:
+            return limit_resp, api_error_http_status(int(limit_resp["err"]))
         return limit_resp
 
-    q = request.args.get("q", "").strip()
-    url_id = request.args.get("id", "").strip()
-    fixits = get_fixits(q)
+    q: str = request.args.get("q", "").strip()
+    url_id: str = request.args.get("id", "").strip()
+    fixits: list[str] = get_fixits(q)
     if len(q.strip()) < 1:
         return get_err(
             WebError.no_query,
@@ -763,10 +797,10 @@ def api_v0_epub() -> Any:
                 "q": q,
                 "fixits": fixits,
             },
-        )
+        ), 400
 
     app.logger.info(f"api_v0_epub: query: {q}")
-    eres = ensure_export("epub", q, url_id)
+    eres: dict[str, Any] = ensure_export("epub", q, url_id)
     if "err" in eres:
         if DYNAMIC_RATE_LIMIT and source_limiter is not None:
             # TODO: maybe only do this when the fic is in the graveyard?
@@ -779,7 +813,7 @@ def api_v0_epub() -> Any:
         # TODO: fix PLR2004 by finding corresponding constant
         if "ret" in eres and int(eres["ret"]) == 5 and "fixits" in eres:  # noqa: PLR2004
             eres.pop("fixits", None)
-        return eres
+        return eres, api_error_http_status(int(eres["err"]))
     for key in ["epub_fname", "urlId", "url"]:
         if key not in eres:
             return get_err(
@@ -790,17 +824,17 @@ def api_v0_epub() -> Any:
                     "q": q,
                     "fixits": fixits,
                 },
-            )
+            ), int(HTTPStatus.INTERNAL_SERVER_ERROR)
 
     if FicBlacklist.check(eres["urlId"]):
-        return get_err(WebError.greylisted)
+        return get_err(WebError.greylisted), api_error_http_status(WebError.greylisted)
 
     info = "[missing metadata; please report this on discord]"
     if "info" in eres:
         info = eres["info"]
-    eh = eres["hash"] if "hash" in eres else str(random.getrandbits(32))
+    eh: Any | str = eres["hash"] if "hash" in eres else str(random.getrandbits(32))
 
-    res = {
+    res: dict[str, Any] = {
         "q": q,
         "err": 0,
         "fixits": [],
@@ -829,49 +863,69 @@ def api_v0_epub() -> Any:
     # update epub url to direct download
     res["epub_url"] = eres["url"]
 
-    return res
+    return res, int(HTTPStatus.OK)
 
 
 @app.route("/api/v0/meta", methods=["GET"])
 def api_v0_meta() -> Any:
-    q = request.args.get("q", "").strip()
-    _url_id = request.args.get("id", "").strip()
+    q: str = request.args.get("q", "").strip()
+    _url_id: str = request.args.get("id", "").strip()
     if len(q.strip()) < 1:
-        return get_err(WebError.no_query, {"q": q})
+        return get_err(WebError.no_query, {"q": q}), api_error_http_status(WebError.no_query)
 
-    r = api_v0_epub()
-    if not isinstance(r, dict):
-        return r  # Rate limited 429
-    if "meta" not in r:
-        if "err" in r and isinstance(r["err"], int):
-            return r
-        return get_err(WebError.internal, {"q": q})
-    return r["meta"]
+    r: Any = api_v0_epub()
+    status_code: int = int(HTTPStatus.OK)
+    payload: Any = r
+    if isinstance(r, tuple):
+        payload = r[0]
+        if len(r) > 1 and isinstance(r[1], int):
+            status_code = r[1]
+    if not isinstance(payload, dict):
+        return r, int(HTTPStatus.TOO_MANY_REQUESTS)  # Rate limited or other prebuilt response
+    if "meta" not in payload:
+        if "err" in payload and isinstance(payload["err"], int):
+            return payload, api_error_http_status(int(payload["err"]))
+        return get_err(WebError.internal, {"q": q}), api_error_http_status(WebError.internal)
+    return payload["meta"], status_code
 
 
 @app.route("/legacy/epub_export", methods=["GET"])
 def legacy_epub_export() -> ResponseReturnValue:
-    res = api_v0_epub()
-    if not isinstance(res, dict):
-        # Rate limited 429
-        q = request.args.get("q", "").strip()
-        d = res.data.decode("utf-8")
-        fixits = ["an error ocurred :(", "", markupsafe.escape(d)]
-        return render_template("index.html", q=q, fixits=fixits, fic_info=None), 429
-    q = request.args.get("q", "").strip() if "q" not in res else res["q"]
-    fixits = res.get("fixits", [])
-    if ("err" not in res or int(res["err"]) == 0) and "urlId" in res:
-        return index_impl(res["urlId"], True)
-    if "fixits" in res:
-        del res["fixits"]
-    fixits = ["an error ocurred :(", *fixits, "", markupsafe.escape(json.dumps(res))]
-    return render_template("index.html", q=q, fixits=fixits, fic_info=None)
+    res: Any = api_v0_epub()
+    status_code: int = int(HTTPStatus.OK)
+    payload: Any = res
+    if isinstance(res, tuple):
+        payload = res[0]
+        if len(res) > 1 and isinstance(res[1], int):
+            status_code = res[1]
+    if not isinstance(payload, dict):
+        # Prebuilt flask response (e.g. rate limited)
+        q: str = request.args.get("q", "").strip()
+        d: str = payload.data.decode("utf-8")
+        fixits: list[str] = ["an error ocurred :(", "", markupsafe.escape(d)]
+        return (
+            render_template("index.html", q=q, fixits=fixits, fic_info=None),
+            getattr(payload, "status_code", int(HTTPStatus.TOO_MANY_REQUESTS)),
+        )
+    q: str = request.args.get("q", "").strip() if "q" not in payload else payload["q"]
+    fixits: list[str] = payload.get("fixits", [])
+    if ("err" not in payload or int(payload["err"]) == 0) and "urlId" in payload:
+        return index_impl(payload["urlId"], True)
+    if "fixits" in payload:
+        del payload["fixits"]
+    fixits = [
+        "an error ocurred :(",
+        *fixits,
+        "",
+        markupsafe.escape(json.dumps(payload)),
+    ]
+    return render_template("index.html", q=q, fixits=fixits, fic_info=None), status_code
 
 
 @app.route("/api/v0/remote", methods=["GET"])
 def api_v0_remote() -> ResponseReturnValue:
-    source = get_request_source()
-    return source.__dict__
+    source: RequestSource = get_request_source()
+    return source.__dict__, 200
 
 
 @app.context_processor

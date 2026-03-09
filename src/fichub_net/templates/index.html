@@ -1,17 +1,15 @@
 {% extends "layout.html" %}
 {% block content %}
-	<main>
-	<h1 class=c>FanFiction Export</h1>
-	<p>Enter a URL and click <span class=b>Export</span> to generate an EPUB
-		or download in an alternate format.
-	</p>
-	<form id=f action="/legacy/epub_export" method=get>
-		<label for=q class=h>Fic URL:</label>
-		<input type="text" size=60 name=q id=q placeholder="https://..." value="{{ request.args.get('q', '') }}" />
-		<br />
-		<button id=x onclick="epub()">Export</button>
-	</form>
-	<div id=i>
+	{% include 'nav_frag.html' %}
+	<main id="main-content" class="surface-card">
+		<h1>FanFiction Export</h1>
+		<p class="hero-intro">Paste a fic URL and click <span class=b>Export</span> to generate a modern EPUB and optional alternate download formats.</p>
+		<form id=f class="hero-form" action="/legacy/epub_export" method=get>
+			<label for=q class=h>Fic URL:</label>
+			<input type="text" size=60 name=q id=q placeholder="https://..." value="{{ request.args.get('q', '') }}" />
+			<button id=x onclick="epub()">Export</button>
+		</form>
+		<div id=i class="result-box">
 		{%- if fixits is not none -%}
 		<p>
 		{%- for fixit in fixits -%}
@@ -46,9 +44,9 @@
 				</ul>
 			{% endif %}
 		{% endif %}
-	</div>
+		</div>
 	</main>
-	<section>
+	<section class="content-grid">
 		{% if false %}
 		<div class='a c'>
 			<p><b>Attention:</b> One of FicHub's service providers is currently
@@ -116,7 +114,8 @@
 				to the site.</p>
 		</div>
 		{% endif %}
-		<h1 id=about>About</h1>
+		<section id=about class="surface-card prose">
+		<h2>About</h2>
 		<p><a href=/>FicHub</a> is a growing set of accessibility tools for reading
 			fanfiction. After entering a URL and clicking <span class=b>Export</span>,
 			basic fic metadata and a link to download as a standard EPUB will
@@ -131,7 +130,9 @@
 		coming, but until then consider checking out
 		<a href='https://fic.ai/popular'>the popular page</a>.</p>
 		<p>Feel free to <a href=#contact>get in touch</a>.</p>
+		</section>
 
+		<section class="surface-card prose">
 		<h2 id=sites>Supported Sites</h2>
 		<ul>
 			<li>SpaceBattles, SufficientVelocity, QuestionableQuesting (XenForo)</li>
@@ -154,7 +155,9 @@
 			<li>FanficAuthors (minimal)</li>
 			<li>Harry Potter Fanfiction (archive from pre-revival)</li>
 		</ul>
+		</section>
 
+		<section class="surface-card prose">
 		<h2 id=help>If you run into issues</h2>
 		<p>In order to be a good citizen of the web, FicHub caches content and
 			throttles the request rate on upstream sources. This means that some
@@ -165,7 +168,9 @@
 			<i>should</i> catch all updates eventually. If a fic is stale and you'd
 			like to request it to be refreshed immediately, please ask
 			<a href=#contact>in the discord or on IRC</a>.</p>
+		</section>
 
+		<section class="surface-card prose">
 		<h2 id=bookmarklet>Bookmarklet</h2>
 		<p>A <a href='https://en.wikipedia.org/wiki/Bookmarklet'>bookmarklet</a>
 			is a small piece of code that can be saved as a bookmark to provide
@@ -178,9 +183,10 @@
 		<p>Alternatively, copy and paste the following code as the destination of
 			a new bookmark:</p>
 		<p class=c><code>javascript:location.href='https://fichub.net/?b=1&amp;q='+encodeURIComponent(location.href)</code></p>
+		</section>
 
 	</section>
-<section>
-{% include 'contact_frag.html' %}
-</section>
+	<section class="surface-card prose">
+	{% include 'contact_frag.html' %}
+	</section>
 {% endblock %}

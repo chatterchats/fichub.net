@@ -2,30 +2,95 @@
 <html lang="en">
 	<head>
 		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
 		<title>{{info.title}} by {{info.author}}</title>
 		<style type="text/css">
-			html { font-size: 24px; font-family: sans-serif; }
-			body { width: 90%; max-width: 960px; margin: 0 auto; }
-			.left { float: left; }
-			.right { float: right; }
-			.chapter_nav { text-align: center; }
-			.cfix { clear: both; }
+			:root {
+				--bg: #f4f8fc;
+				--text: #1f2a35;
+				--muted: #4f6070;
+				--card: #ffffff;
+				--border: #c9d6e6;
+				--link: #0a6281;
+				--link-hover: #054b63;
+			}
+			html {
+				font-size: 18px;
+				font-family: "Atkinson Hyperlegible", "IBM Plex Sans", "Segoe UI", sans-serif;
+				background: linear-gradient(180deg, #f8fbff, var(--bg));
+				color: var(--text);
+			}
+			body {
+				width: min(92%, 58rem);
+				margin: 1rem auto 2rem;
+			}
+			a { color: var(--link); }
+			a:hover { color: var(--link-hover); }
+			h1, h2, h3 { line-height: 1.2; }
+			.meta {
+				border: 1px solid var(--border);
+				border-radius: .8rem;
+				padding: 1rem 1.1rem;
+				background: var(--card);
+				margin-bottom: 1rem;
+			}
+			.meta p {
+				margin: .45rem 0;
+			}
+			.chapter_nav {
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+				gap: .6rem;
+				border: 1px solid var(--border);
+				border-radius: .7rem;
+				padding: .55rem .75rem;
+				background: var(--card);
+				margin: 1.25rem 0 .9rem;
+			}
+			.chapter_nav .center {
+				margin: 0 auto;
+				color: var(--muted);
+			}
+			#contents-list {
+				border: 1px solid var(--border);
+				border-radius: .7rem;
+				padding: .8rem 1rem;
+				background: var(--card);
+			}
+			#contents-list ol {
+				margin: .4rem 0 .2rem;
+				padding-left: 1.2rem;
+			}
+			.chapter-body {
+				border: 1px solid var(--border);
+				border-radius: .8rem;
+				padding: .95rem 1.1rem;
+				background: var(--card);
+			}
+			.chapter-foot {
+				display: block;
+				margin: 1.2rem 0 1.7rem;
+				text-align: center;
+			}
 		</style>
 	</head>
 	<body>
-		<h1><span class="title">{{info.title}}</span></h1>
-		<h2>by <span class="author">{{info.author}}</span></h2>
-		<div>{{info.description|safe}}</div>
-		<p>Original source:
-		<a rel="noopener noreferrer" href="{{info.source}}">{{info.source}}</a>
-		</p>
-		<p>Chapters: {{info.chapters}}</p>
-		<p>Words: {{info.words}}</p>
-		{% if info.extra_meta is not none and info.extra_meta|length %}
-		<p>{{info.extra_meta}}</p>
-		{% endif %}
-		<p>Exported with the assistance of
-			<a href='https://fichub.net'>FicHub.net</a></p>
+		<section class="meta">
+			<h1><span class="title">{{info.title}}</span></h1>
+			<h2>by <span class="author">{{info.author}}</span></h2>
+			<div>{{info.description|safe}}</div>
+			<p>Original source:
+			<a rel="noopener noreferrer" href="{{info.source}}">{{info.source}}</a>
+			</p>
+			<p>Chapters: {{info.chapters}}</p>
+			<p>Words: {{info.words}}</p>
+			{% if info.extra_meta is not none and info.extra_meta|length %}
+			<p>{{info.extra_meta}}</p>
+			{% endif %}
+			<p>Exported with the assistance of
+				<a href='https://fichub.net'>FicHub.net</a></p>
+		</section>
 		<nav id="contents-list"> <ol>
 			{% for chapter in chapters %}
 				<li><a href="#chap_{{loop.index}}">{{chapter.title}}</a></li>
@@ -35,17 +100,19 @@
 		<div id="chap_{{loop.index}}">
 			<div class="chapter_nav">
 				{% if loop.index > 1 %}
-				<a href="#chap_{{loop.index - 1}}" class="left">previous chapter</a>
+				<a href="#chap_{{loop.index - 1}}">Previous</a>
 				{% endif %}
+				<span class="center">Chapter {{loop.index}} of {{chapters|length}}</span>
 				{% if loop.index < chapters|length %}
-				<a href="#chap_{{loop.index + 1}}" class="right">next chapter</a>
+				<a href="#chap_{{loop.index + 1}}">Next</a>
 				{% endif %}
-				<span class="cfix"></span>
-				<a href="#contents-list">chapter list</a>
+				<a href="#contents-list">Chapter list</a>
 			</div>
-			{{ chapter.content|safe }}
+			<div class="chapter-body">
+				{{ chapter.content|safe }}
+			</div>
 		</div>
+		<a class="chapter-foot" href="#contents-list">Back to chapter list</a>
 		{% endfor %}
-		<a href="#contents-list">(back to chapter list)</a>
 	</body>
 </html>
