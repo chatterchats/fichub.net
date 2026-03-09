@@ -1,48 +1,72 @@
-Setup the src/fichub_net/ authentications and rl_conf files by copying the
-examples (these will be mounted over in the live container):
+# Development Environment (Docker Compose)
 
-1. cd ../src/fichub_net/
-2. cp authentications.ex.py authentications.py
-3. cp rl_conf.ex.py rl_conf.py
-4. cd ../../dev-docker-compose
+This directory contains a Docker Compose setup for local development
+of `fichub.net`. It launches PostgreSQL, Elasticsearch, a fake Alexandria
+API, migration/index bootstrap jobs, and the Flask application with source
+code mounted for hot reloading.
 
-Create an authentications.py file, based on authentications.ex.py. You can
-simply copy it to use the fake alexandria api included for testing:
+## Prerequisites
 
-1. cp authentications.ex.py authentications.py
+- Docker Engine (Docker Desktop)
+- `make` (optional; used for building frontend assets)
 
-To compile the ts/sass into js/css when first getting started or when making
-changes to the frontend a utility image can be used via make in the project
-root:
-1. make frontend
+## Setup
 
-Start the services:
+1. Configure credentials in `dev-docker-compose/authentications.py`.
 
-1. docker compose up -d
+   ```sh
+   cd dev-docker-compose
+   cp authentications.ex.py authentications.py   # if you need a fresh local copy
+   ```
 
-This starts and initializes several components:
-1. `db` (postgres), and `app-migrate` runs the sql migrations
-2. `es` (elasicsearch), and `es-init` creates the initial index
-3. `ax` (alexandria), fake alexandria api for testing
-4. `app` -- the actual fichub.net service, flask dev mode
+2. `rl_conf.dev.py` is mounted as `src/fichub_net/rl_conf.py` automatically,
+   so no separate copy step is required.
 
-The container mounts the source code and runs flask in debug mode which suports
-hot reloading. If changes don't appear live you may need to rebuild the
-container:
+3. Optionally populate `authentications.py` with real credentials. Leaving the
+   default redacted values is fine when using the fake Alexandria service.
 
-1. docker compose build
+4. Build frontend assets if you plan to modify the UI:
 
-Restart the app container:
+   ```sh
+   make frontend    # run from the project root
+   ```
 
-1. docker compose restart app
+## Running the services
 
+Start everything in detached mode (first run should include `--build`):
 
-Access the site running in the container at http://localhost:59294/ 
+```sh
+docker compose up -d --build
+```
 
-When using the fake alexandria, the responses it gives are based on the content
-in the tests/dat/ax directory. By default you can search for and export the
-"foo" fic which gets a urlId of "foo".
+The following services are included:
 
-This currently only supports epub, the Dockerfile.dev does not currently
-install calibre which is required for most other filetypes currently.
+- `db` - PostgreSQL 14.8
+- `es` - Elasticsearch 8.8.0
+- `es-init` - one-shot Elasticsearch index bootstrap (`uv run ./src/fichub_net/es.py`)
+- `app-migrate` - one-shot DB migration job (`uv run ./src/fichub_net/db.py migrate`)
+- `ax` - local HTTP server for fake Alexandria responses from `tests/dat/ax`
+- `app` - Flask development server (`flask run --debug --host 0.0.0.0`)
 
+If code changes are not reflected, rebuild the image:
+
+```sh
+docker compose build
+```
+
+To restart only the application container:
+
+```sh
+docker compose restart app
+```
+
+Access the running site at `http://localhost:59294/`.
+
+### Testing with Fake Alexandria
+
+The fake Alexandria service serves responses based on files in
+`tests/dat/ax`. A sample story with URL ID `foo` is available for quick
+validation.
+
+> **Note:** `Dockerfile.dev` installs Calibre and sets `JANUS_USE_LOCAL_CALIBRE=true`,
+> so local MOBI/PDF conversion is available in this dev setup.

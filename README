@@ -1,90 +1,99 @@
-FicHub.net is a frontend for generating ebooks from web fiction (fanfic and
-web serials) based on pre-existing external metadata and content services.
+# FicHub.net
 
-This project is licensed under AGPL-3.0-or-later. See the LICENSE file for
-complete details.
+> A frontend for generating ebooks from web fiction (fanfic & web serials).
 
+[![License](https://img.shields.io/badge/license-AGPL%203.0-blue.svg)](#license)
 
-# Contact
+FicHub.net assembles EPUB, MOBI, and PDF documents using metadata and content
+provided by external services.
 
-There is an IRC channel ##fichub on Libera.Chat and a discord at
-	https://discord.gg/sByBAhX
+## Table of Contents
 
-If you'd like to support iris the creator, they have a patreon:
-	https://www.patreon.com/irides
+- [Features](#features)
+- [Prerequisites](#prerequisites)
+- [Development Setup](#development-setup)
+- [Configuration](#configuration)
+- [Deployment](#deployment)
+- [Support](#support)
+- [License](#license)
+- [Contact](#contact)
 
+## Features
 
-# Setup
+- Export ebooks in multiple formats (EPUB/MOBI/PDF).
+- Integrates with the Alexandria API for metadata and content lookup.
+- Uses Elasticsearch for search fallback.
+- Configurable caching and asset directories.
 
-If you're setting this up for development, please look at the
-./dev-docker-compose/README which has simple orchestration for a development
-environment.
+## Prerequisites
 
-There are several additional components needed that are not currently covered
-by pyproject.toml if you want a fully functioning instance of FicHub, though
-several of these may be omitted:
+- Python 3.14 or later (see `pyproject.toml`).
+- PostgreSQL database.
+- Elasticsearch instance.
+- Calibre (for MOBI/PDF exports).
+- Node.js/TypeScript and Sass (optional, for frontend builds).
 
-	typescript:
-		used for frontend js
+## Development Setup
 
-	sass:
-		used for frontend styling
+The easiest way to get started is with the Docker‑based development
+environment described in [dev-docker-compose/README](dev-docker-compose/README).
 
-	alexandria api access:
-		used to lookup fic metadata and fetch content
+### Python environment
 
-		copy authentications.ex.py to authentications.py and fill in credentials
-		to self host, see https://github.com/FanFicDev/hermes
+```sh
+# create and activate a uv-managed virtual environment
+uv venv
 
-	postgres:
-		used to store all metadata
+# install the package and development requirements
+uv pip install . --group dev
+```
 
-		If a new database is created for a new instance, the OIL_DB_DBNAME env
-		variable likely needs updated in the run and dump_db scripts.
+### Frontend assets
 
-		by default the fichub and b_fichub databases are used depending on whether
-		the beta is running
+Compile TypeScript and Sass using the `make frontend` helper:
 
-	elasticsearch:
-		used for search fallback when a fic is not found
+```sh
+make frontend
+```
 
-	calibre:
-		used to generate mobi and pdf formats
+Alternatively, install the Node toolchain directly and run your preferred
+build commands.
 
-	/etc/hosts:
-		elastic.fichub.net is used for the elasticsearch host, or adjust
-		ELASTICSEARCH_HOSTS in es.py
+### Configuration
 
-	cache dir:
-		/mnt/selene_fichub/cache and /mnt/atem_fichub/cache are the default primary
-		and secondary cache directories, or adjust PRIMARY_CACHE_DIR and
-		SECONDARY_CACHE_DIR in ebook.py
+Copy example configuration files and adjust credentials as needed:
 
-	compiled js dir:
-		/var/www/fichub.net/ and /var/www/b.fichub.net/ are used the target
-		directory for built js and css and can be adjusted in the prod and beta
-		Makefile targets
+```sh
+cd src/fichub_net
+cp authentications.ex.py authentications.py
+cp rl_conf.ex.py rl_conf.py
+```
 
-See https://github.com/FicHub/infra-dev if you're interested in using Docker
-to run a dev instance.
+Set environment variables such as `OIL_DB_DBNAME`. For non-env settings,
+update `authentications.py` (API/Elasticsearch endpoints) and `ebook.py`
+(cache directories).
 
+## Deployment
 
-# Licensing
+See the [FicHub/infra-dev](https://github.com/FicHub/infra-dev) repository for
+production deployment instructions using Docker.
 
-FicHub.net is a frontend for generating ebooks from web fiction (fanfic and
-web serials) based on pre-existing external metadata and content services.
-Copyright (C) 2020-2021  iris
+## Support
 
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as published
-by the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+Join the community for help and discussion:
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
+- **IRC:** `##fichub` on Libera.Chat
+- **Discord:** <https://discord.gg/sByBAhX>
 
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
+Consider supporting the project maintainer on Patreon:
+<https://www.patreon.com/irides>
 
+## License
+
+This project is released under the **GNU Affero General Public License v3.0 or
+later**. See the [LICENSE](LICENSE) file for full text.
+
+## Contact
+
+For questions, bug reports, or contributions, use the channels listed under
+[Support](#support).
