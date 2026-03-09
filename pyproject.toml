@@ -3,11 +3,11 @@ name = "fichub-net"
 requires-python = ">=3.14"
 version = "0.1.0"
 dependencies = [
-	"Flask",
+	"flask",
 	"requests",
 	"psycopg2",
 	"python-dateutil",
-	"EbookLib @ git+https://github.com/FicHub/ebooklib@ef040aa",
+	"ebooklib @ git+https://github.com/FicHub/ebooklib@ef040aa",
 	"oil @ git+https://github.com/FanFicDev/python-oil@b575c0c",
 	"elasticsearch==8.19.3",
 	"psutil",
