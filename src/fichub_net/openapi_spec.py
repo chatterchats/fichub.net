@@ -5,164 +5,166 @@ def build_openapi_spec(server_url: str) -> dict[str, Any]:
     return {
         "openapi": "3.0.3",
         "info": {
-                "title": "FicHub API",
-                "version": "0.1.0",
-                "description": (
-                    "Public endpoints for exporting and retrieving fanfiction metadata. "
-                    "Please set a custom User-Agent, avoid concurrent burst traffic, "
-                    "and handle 429 responses with Retry-After."
-                ),
+            "title": "FicHub API",
+            "version": "0.1.0",
+            "description": (
+                "Public endpoints for exporting and retrieving fanfiction metadata. "
+                "Please set a custom User-Agent, avoid concurrent burst traffic, "
+                "and handle 429 responses with Retry-After."
+            ),
         },
-            "servers": [{"url": server_url, "description": "Current server"}],
+        "servers": [{"url": server_url, "description": "Current server"}],
         "paths": {
             "/api/v0/epub": {
                 "get": {
-                        "summary": "Export a fic and return download URLs",
-                        "parameters": [
-                            {
-                                "name": "q",
-                                "in": "query",
-                                "required": True,
-                                "schema": {"type": "string"},
-                                "description": "Full source URL of the fic",
-                            },
-                            {
-                                "name": "id",
-                                "in": "query",
-                                "required": False,
-                                "schema": {"type": "string"},
-                                "description": "Optional known FicHub url id",
-                            },
-                        ],
+                    "summary": "Export a fic and return download URLs",
+                    "parameters": [
+                        {
+                            "name": "q",
+                            "in": "query",
+                            "required": True,
+                            "schema": {"type": "string"},
+                            "description": "Full source URL of the fic",
+                        },
+                        {
+                            "name": "id",
+                            "in": "query",
+                            "required": False,
+                            "schema": {"type": "string"},
+                            "description": "Optional known FicHub url id",
+                        },
+                    ],
                     "responses": {
                         "200": {
-                                "description": "Export metadata and generated URLs",
+                            "description": "Export metadata and generated URLs",
                             "content": {
-                                    "application/json": {
-                                        "schema": {
-                                            "$ref": "#/components/schemas/EpubSuccessResponse"
-                                        }
+                                "application/json": {
+                                    "schema": {
+                                        "$ref": "#/components/schemas/EpubSuccessResponse"
                                     }
+                                }
                             },
                         },
-                            "429": {
-                                "description": "Too many requests",
-                                "headers": {
-                                    "Retry-After": {
-                                        "description": "Seconds to wait before retry",
-                                        "schema": {"type": "string"},
-                                    }
-                                },
-                                "content": {
-                                    "application/json": {
-                                        "schema": {
-                                            "$ref": "#/components/schemas/RateLimitedResponse"
-                                        }
-                                    }
-                                },
+                        "429": {
+                            "description": "Too many requests",
+                            "headers": {
+                                "Retry-After": {
+                                    "description": "Seconds to wait before retry",
+                                    "schema": {"type": "string"},
+                                }
                             },
-                            "4XX": {
-                                "description": "Client error (for example missing/invalid parameters or forbidden source)",
-                                "content": {
-                                    "application/json": {
-                                        "schema": {
-                                            "$ref": "#/components/schemas/EpubErrorResponse"
-                                        }
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "$ref": "#/components/schemas/RateLimitedResponse"
                                     }
-                                },
+                                }
                             },
-                            "5XX": {
-                                "description": "Server or upstream failure",
-                                "content": {
-                                    "application/json": {
-                                        "schema": {
-                                            "$ref": "#/components/schemas/EpubErrorResponse"
-                                        }
+                        },
+                        "4XX": {
+                            "description": "Client error (for example missing/invalid parameters or forbidden source)",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "$ref": "#/components/schemas/EpubErrorResponse"
                                     }
-                                },
+                                }
                             },
+                        },
+                        "5XX": {
+                            "description": "Server or upstream failure",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "$ref": "#/components/schemas/EpubErrorResponse"
+                                    }
+                                }
+                            },
+                        },
                     },
                 }
             },
             "/api/v0/meta": {
                 "get": {
-                        "summary": "Get parsed metadata for a fic",
-                        "parameters": [
-                            {
-                                "name": "q",
-                                "in": "query",
-                                "required": True,
-                                "schema": {"type": "string"},
-                                "description": "Full source URL of the fic",
-                            },
-                            {
-                                "name": "id",
-                                "in": "query",
-                                "required": False,
-                                "schema": {"type": "string"},
-                                "description": "Optional known FicHub url id",
-                            },
-                        ],
+                    "summary": "Get parsed metadata for a fic",
+                    "parameters": [
+                        {
+                            "name": "q",
+                            "in": "query",
+                            "required": True,
+                            "schema": {"type": "string"},
+                            "description": "Full source URL of the fic",
+                        },
+                        {
+                            "name": "id",
+                            "in": "query",
+                            "required": False,
+                            "schema": {"type": "string"},
+                            "description": "Optional known FicHub url id",
+                        },
+                    ],
                     "responses": {
                         "200": {
-                                "description": "Metadata for fic",
+                            "description": "Metadata for fic",
                             "content": {
-                                    "application/json": {
-                                        "schema": {"$ref": "#/components/schemas/FicMetadata"}
+                                "application/json": {
+                                    "schema": {
+                                        "$ref": "#/components/schemas/FicMetadata"
                                     }
+                                }
                             },
                         },
-                            "429": {
-                                "description": "Too many requests",
-                                "headers": {
-                                    "Retry-After": {
-                                        "description": "Seconds to wait before retry",
-                                        "schema": {"type": "string"},
-                                    }
-                                },
-                                "content": {
-                                    "application/json": {
-                                        "schema": {
-                                            "$ref": "#/components/schemas/RateLimitedResponse"
-                                        }
-                                    }
-                                },
+                        "429": {
+                            "description": "Too many requests",
+                            "headers": {
+                                "Retry-After": {
+                                    "description": "Seconds to wait before retry",
+                                    "schema": {"type": "string"},
+                                }
                             },
-                            "4XX": {
-                                "description": "Client error (for example missing/invalid parameters or forbidden source)",
-                                "content": {
-                                    "application/json": {
-                                        "schema": {
-                                            "$ref": "#/components/schemas/EpubErrorResponse"
-                                        }
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "$ref": "#/components/schemas/RateLimitedResponse"
                                     }
-                                },
+                                }
                             },
-                            "5XX": {
-                                "description": "Server or upstream failure",
-                                "content": {
-                                    "application/json": {
-                                        "schema": {
-                                            "$ref": "#/components/schemas/EpubErrorResponse"
-                                        }
+                        },
+                        "4XX": {
+                            "description": "Client error (for example missing/invalid parameters or forbidden source)",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "$ref": "#/components/schemas/EpubErrorResponse"
                                     }
-                                },
+                                }
                             },
+                        },
+                        "5XX": {
+                            "description": "Server or upstream failure",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "$ref": "#/components/schemas/EpubErrorResponse"
+                                    }
+                                }
+                            },
+                        },
                     },
                 }
             },
             "/api/v0/remote": {
                 "get": {
-                        "summary": "Return request source context",
+                    "summary": "Return request source context",
                     "responses": {
                         "200": {
-                                "description": "Source context for current request",
+                            "description": "Source context for current request",
                             "content": {
-                                    "application/json": {
-                                        "schema": {
-                                            "$ref": "#/components/schemas/RemoteSourceResponse"
-                                        }
+                                "application/json": {
+                                    "schema": {
+                                        "$ref": "#/components/schemas/RemoteSourceResponse"
                                     }
+                                }
                             },
                         }
                     },
@@ -171,90 +173,119 @@ def build_openapi_spec(server_url: str) -> dict[str, Any]:
         },
         "components": {
             "schemas": {
-                    "RateLimitedResponse": {
-                        "type": "object",
-                        "properties": {
-                            "err": {"type": "integer", "example": -429},
-                            "msg": {"type": "string", "example": "too many requests"},
-                            "retry_after": {"type": "integer", "example": 8},
-                        },
-                        "required": ["err", "msg", "retry_after"],
-                        "additionalProperties": True,
-                    },
-                    "EpubErrorResponse": {
+                "RateLimitedResponse": {
                     "type": "object",
                     "properties": {
-                            "err": {"type": "integer", "description": "Internal error code"},
-                            "msg": {"type": "string", "description": "Human-readable error summary"},
-                            "q": {"type": "string", "description": "Query URL/value"},
+                        "err": {"type": "integer", "example": -429},
+                        "msg": {"type": "string", "example": "too many requests"},
+                        "retry_after": {"type": "integer", "example": 8},
+                    },
+                    "required": ["err", "msg", "retry_after"],
+                    "additionalProperties": True,
+                },
+                "EpubErrorResponse": {
+                    "type": "object",
+                    "properties": {
+                        "err": {
+                            "type": "integer",
+                            "description": "Internal error code",
+                        },
+                        "msg": {
+                            "type": "string",
+                            "description": "Human-readable error summary",
+                        },
+                        "q": {"type": "string", "description": "Query URL/value"},
                         "fixits": {
                             "type": "array",
-                                "description": "Suggested corrections or alternatives",
+                            "description": "Suggested corrections or alternatives",
                             "items": {"type": "string"},
                         },
-                            "key": {"type": "string", "description": "Missing expected key (ensure_failed)"},
-                            "etext": {"type": ["string", "null"], "description": "Backend/exporter error text"},
+                        "key": {
+                            "type": "string",
+                            "description": "Missing expected key (ensure_failed)",
+                        },
+                        "etext": {
+                            "type": ["string", "null"],
+                            "description": "Backend/exporter error text",
+                        },
                         "res": {
                             "type": "string",
-                                "description": "Detailed upstream parsing or resolution info",
+                            "description": "Detailed upstream parsing or resolution info",
                         },
-                            "ret": {"type": "integer", "description": "Upstream return code"},
+                        "ret": {
+                            "type": "integer",
+                            "description": "Upstream return code",
+                        },
                         "upstream": {
                             "type": "boolean",
-                                "description": "Whether failure originated from upstream service",
+                            "description": "Whether failure originated from upstream service",
                         },
-                            "meta": {"$ref": "#/components/schemas/FicMetadata"},
-                            "retry_after": {"type": "integer"},
+                        "meta": {"$ref": "#/components/schemas/FicMetadata"},
+                        "retry_after": {"type": "integer"},
                     },
                     "required": ["err", "msg"],
-                        "additionalProperties": True,
+                    "additionalProperties": True,
                 },
-                    "RemoteSourceResponse": {
+                "RemoteSourceResponse": {
                     "type": "object",
                     "properties": {
                         "created": {"type": "string", "format": "date-time"},
                         "description": {"type": "string"},
                         "id": {"type": "integer"},
-                            "is_automated": {"type": "boolean"},
+                        "is_automated": {"type": "boolean"},
                         "route": {"type": "string", "format": "uri"},
                     },
-                        "required": ["created", "description", "id", "is_automated", "route"],
-                        "additionalProperties": True,
+                    "required": [
+                        "created",
+                        "description",
+                        "id",
+                        "is_automated",
+                        "route",
+                    ],
+                    "additionalProperties": True,
                 },
-                    "EpubSuccessResponse": {
+                "EpubSuccessResponse": {
                     "type": "object",
                     "properties": {
-                            "q": {"type": "string"},
-                            "err": {"type": "integer", "example": 0},
-                            "fixits": {"type": "array", "items": {"type": "string"}},
-                            "info": {"type": "string"},
-                            "urlId": {"type": "string"},
-                            "slug": {"type": "string"},
-                            "epub_url": {"type": "string"},
-                            "html_url": {"type": "string"},
-                            "mobi_url": {"type": "string"},
-                            "pdf_url": {"type": "string"},
+                        "q": {"type": "string"},
+                        "err": {"type": "integer", "example": 0},
+                        "fixits": {"type": "array", "items": {"type": "string"}},
+                        "info": {"type": "string"},
+                        "urlId": {"type": "string"},
+                        "slug": {"type": "string"},
+                        "epub_url": {"type": "string"},
+                        "html_url": {"type": "string"},
+                        "mobi_url": {"type": "string"},
+                        "pdf_url": {"type": "string"},
                         "hashes": {
                             "type": "object",
-                                "additionalProperties": {"type": "string"},
+                            "additionalProperties": {"type": "string"},
                         },
-                            "notes": {"type": "array", "items": {"type": "string"}},
-                            "meta": {"$ref": "#/components/schemas/FicMetadata"},
+                        "notes": {"type": "array", "items": {"type": "string"}},
+                        "meta": {"$ref": "#/components/schemas/FicMetadata"},
                         "urls": {
                             "type": "object",
-                                "additionalProperties": {"type": "string"},
+                            "additionalProperties": {"type": "string"},
                         },
                     },
-                        "required": ["err", "q", "fixits", "info", "urlId", "urls", "epub_url"],
-                        "additionalProperties": True,
+                    "required": [
+                        "err",
+                        "q",
+                        "fixits",
+                        "info",
+                        "urlId",
+                        "urls",
+                        "epub_url",
+                    ],
+                    "additionalProperties": True,
                 },
-                    "FicMetadata": {
+                "FicMetadata": {
                     "type": "object",
                     "properties": {
                         "author": {"type": "string"},
-                            "authorId": {"type": ["integer", "null"]},
-                            "authorLocalId": {"type": ["string", "null"]},
-                            "authorUrl": {"type": ["string", "null"]},
+                        "authorId": {"type": ["integer", "null"]},
+                        "authorLocalId": {"type": ["string", "null"]},
+                        "authorUrl": {"type": ["string", "null"]},
                         "chapters": {"type": "integer"},
                         "created": {"type": "string", "format": "date-time"},
                         "description": {"type": "string"},
@@ -263,12 +294,16 @@ def build_openapi_spec(server_url: str) -> dict[str, Any]:
                         "rawExtendedMeta": {
                             "oneOf": [
                                 {"type": "null"},
-                                {"$ref": "#/components/schemas/FicHubRawExtendedMetaFFN"},
-                                {"$ref": "#/components/schemas/FicHubRawExtendedMetaAO3"},
+                                {
+                                    "$ref": "#/components/schemas/FicHubRawExtendedMetaFFN"
+                                },
+                                {
+                                    "$ref": "#/components/schemas/FicHubRawExtendedMetaAO3"
+                                },
                             ]
                         },
                         "source": {"type": "string"},
-                            "sourceId": {"type": ["integer", "null"]},
+                        "sourceId": {"type": ["integer", "null"]},
                         "status": {"type": "string"},
                         "title": {"type": "string"},
                         "updated": {"type": "string", "format": "date-time"},
@@ -290,7 +325,7 @@ def build_openapi_spec(server_url: str) -> dict[str, Any]:
                         "updated",
                         "words",
                     ],
-                        "additionalProperties": True,
+                    "additionalProperties": True,
                 },
                 "FicHubRawExtendedMetaFFN": {
                     "type": "object",
@@ -336,18 +371,30 @@ def build_openapi_spec(server_url: str) -> dict[str, Any]:
                     "type": "object",
                     "properties": {
                         "category": {"type": "array", "items": {"type": "string"}},
-                        "category_hrefs": {"type": "array", "items": {"type": "string"}},
+                        "category_hrefs": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                        },
                         "character": {"type": "array", "items": {"type": "string"}},
-                        "character_hrefs": {"type": "array", "items": {"type": "string"}},
+                        "character_hrefs": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                        },
                         "fandom": {"type": "array", "items": {"type": "string"}},
                         "fandom_hrefs": {"type": "array", "items": {"type": "string"}},
                         "freeform": {"type": "array", "items": {"type": "string"}},
-                        "freeform_hrefs": {"type": "array", "items": {"type": "string"}},
+                        "freeform_hrefs": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                        },
                         "language": {"type": "string"},
                         "rating": {"type": "array", "items": {"type": "string"}},
                         "rating_hrefs": {"type": "array", "items": {"type": "string"}},
                         "relationship": {"type": "array", "items": {"type": "string"}},
-                        "relationship_hrefs": {"type": "array", "items": {"type": "string"}},
+                        "relationship_hrefs": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                        },
                         "series": {"type": "array", "items": {"type": "string"}},
                         "series_hrefs": {"type": "array", "items": {"type": "string"}},
                         "stats": {

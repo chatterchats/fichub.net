@@ -55,7 +55,7 @@ class Limiter:
                 """,
                 (key,),
             )
-            r: tuple | None = curs.fetchone()
+            r = curs.fetchone()
             return None if r is None else Limiter.from_row(r)
 
     @staticmethod
@@ -91,7 +91,7 @@ class Limiter:
     def retry_after(self, value: float) -> float | None:
         with oil.open() as db, db.cursor() as curs:
             curs.execute("select fichub.fill_limiter(%s, %s)", (self.key, value))
-            r: tuple | None = curs.fetchone()
+            r = curs.fetchone()
             if r is None:
                 msg = "Limiter.retryAfter: no fill limit response"
                 raise FillLimiterError(msg)
@@ -106,7 +106,7 @@ class Limiter:
                 "update fichub.limiter set value = value + %s where key = %s returning value",
                 (value, self.key),
             )
-            r: tuple | None = curs.fetchone()
+            r = curs.fetchone()
             if r is None:
                 msg = "Limiter.tick: no tick response"
                 raise MissingLimiterError(msg)

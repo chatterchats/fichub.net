@@ -26,7 +26,7 @@ def req_json(link: str, retry_count: int = 5, timeout: float = 300.0) -> dict[An
         auth=(a.AX_USER, a.AX_PASS),
     )
     try:
-        p: dict | Any = r.json()
+        p: dict[str, Any] | Any = r.json()
     except ValueError:
         if retry_count < 1:
             return {

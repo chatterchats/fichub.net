@@ -334,7 +334,7 @@ def test_create_html_bundle(app: Flask) -> None:
         "html",
         "test-ebook-id-4",
         "756a51b394ed51cf34465da8d1196eb0",
-        "144679f465f2fa01af21b72721b6efdd",
+        "73c807a4f1e87dbd0c320d98a818a2e0",
     )
     version = ebook.export_version(etype, url_id)
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env -S uv run --quiet
-from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar
+from typing import TYPE_CHECKING, Any, ParamSpec, TextIO, TypeVar
 import base64
 import functools
 from http import HTTPStatus
@@ -24,8 +24,12 @@ import psutil
 import requests
 
 EXPECTED_ARG_COUNT: int = 3
-USE_LOCAL_CALIBRE: bool = os.environ.get("JANUS_USE_LOCAL_CALIBRE", "false").lower() == "true"
-EBOOK_CONVERT_PATH: str = os.environ.get("JANUS_EBOOK_CONVERT_PATH", "/opt/calibre/ebook-convert")
+USE_LOCAL_CALIBRE: bool = (
+    os.environ.get("JANUS_USE_LOCAL_CALIBRE", "false").lower() == "true"
+)
+EBOOK_CONVERT_PATH: str = os.environ.get(
+    "JANUS_EBOOK_CONVERT_PATH", "/opt/calibre/ebook-convert"
+)
 
 
 class WaitTimeoutError(Exception):
@@ -36,13 +40,17 @@ def init_logging() -> None:
     if not Path("./log").is_dir():
         Path("./log").mkdir(parents=True)
 
-    file_formatter: logging.Formatter = logging.Formatter(fmt="%(asctime)s\t%(levelname)s\t%(message)s", datefmt="%s")
+    file_formatter: logging.Formatter = logging.Formatter(
+        fmt="%(asctime)s\t%(levelname)s\t%(message)s", datefmt="%s"
+    )
     file_handler: RotatingFileHandler = RotatingFileHandler("./log/janus.log")
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(file_formatter)
 
-    stream_formatter: logging.Formatter = logging.Formatter(fmt="%(asctime)s\t%(levelname)s\t%(message)s")
-    stream_handler: logging.StreamHandler = logging.StreamHandler(sys.stdout)
+    stream_formatter: logging.Formatter = logging.Formatter(
+        fmt="%(asctime)s\t%(levelname)s\t%(message)s"
+    )
+    stream_handler: logging.StreamHandler[TextIO] = logging.StreamHandler(sys.stdout)
     stream_handler.setLevel(logging.DEBUG)
     stream_handler.setFormatter(stream_formatter)
 
@@ -93,7 +101,11 @@ def trace_timing(fspec: list[str]) -> Callable[[Callable[P, T]], Callable[P, T]]
         def wrapped(*args: P.args, **kwargs: P.kwargs) -> T:
             with LoggingTimer(
                 func.__name__,
-                {k: v for k, v in inspect.getcallargs(func, *args, **kwargs).items() if k in fspec},
+                {
+                    k: v
+                    for k, v in inspect.getcallargs(func, *args, **kwargs).items()
+                    if k in fspec
+                },
             ):
                 return func(*args, **kwargs)
 
@@ -103,7 +115,9 @@ def trace_timing(fspec: list[str]) -> Callable[[Callable[P, T]], Callable[P, T]]
 
 
 def plog(msg: str, **kwargs: Any) -> None:
-    msg = json.dumps({"service": "fichub/janus", "pid": os.getpid(), "msg": msg} | kwargs)
+    msg = json.dumps(
+        {"service": "fichub/janus", "pid": os.getpid(), "msg": msg} | kwargs
+    )
 
     janus_logger: logging.Logger = logging.getLogger("janus")
     janus_logger.info(msg)
@@ -127,7 +141,7 @@ def wait_for_our_turn(key: str) -> None:
         min_created: float = 1.0 * 9e9
         for p in psutil.process_iter():
             if p.pid == us_pid:
-                us_created: float = p.create_time()
+                us_created = p.create_time()
             cmdl = p.cmdline()
             if (
                 len(cmdl) != (EXPECTED_ARG_COUNT + 1)  # includes python
@@ -141,7 +155,12 @@ def wait_for_our_turn(key: str) -> None:
             if min_pid is None or p.create_time() < min_created:
                 min_pid = p.pid
                 min_created = p.create_time()
-        if min_created is not None and us_created is not None and min_pid != us_pid and min_created < us_created:
+        if (
+            min_created is not None
+            and us_created is not None
+            and min_pid != us_pid
+            and min_created < us_created
+        ):
             if cnt > max_other_waiting:
                 plog(f"there are at least {max_other_waiting} other waiting; aborting")
                 sys.exit(103)
@@ -190,7 +209,7 @@ def convert_janus(epub_fname: str, tmp_fname: str) -> int:
 
     timeout_s = 285.1
     if "CONVERT_TIMEOUT" in os.environ:
-        timeout_s: float = int(os.environ["CONVERT_TIMEOUT"]) - 10.1
+        timeout_s = int(os.environ["CONVERT_TIMEOUT"]) - 10.1
         plog("janus request timeout", timeout_s=timeout_s)
 
     try:
@@ -222,10 +241,10 @@ def convert_janus(epub_fname: str, tmp_fname: str) -> int:
 
         r.raise_for_status()
 
-        j: dict | Any = r.json()
+        j = r.json()
 
-        content_b64: Any = j["content"]
-        content: bytes = base64.b64decode(content_b64)
+        content_b64 = j["content"]
+        content = base64.b64decode(content_b64)
         j["content.len"] = len(content)
         del j["content"]
 
@@ -233,7 +252,7 @@ def convert_janus(epub_fname: str, tmp_fname: str) -> int:
         with Path(tmp_fname).open("wb") as f:
             f.write(content)
 
-        ret: int = j["code"]
+        ret = j["code"]
     except Exception as e:
         plog("unhandled exception in convert_janus", err=f"{e}")
     return ret
@@ -256,19 +275,19 @@ def main() -> int:
     plog("waiting on key", key=key)
     wait_for_our_turn(key)
 
-    ret = 255
-
-    ret: int = convert_local(epub_fname, tmp_fname) if USE_LOCAL_CALIBRE else convert_janus(epub_fname, tmp_fname)
-
-    return ret
+    return (
+        convert_local(epub_fname, tmp_fname)
+        if USE_LOCAL_CALIBRE
+        else convert_janus(epub_fname, tmp_fname)
+    )
 
 
 if __name__ == "__main__":
     init_logging()
     try:
-        ret: int = main()
+        ret = main()
         plog("returning", ret=ret)
     except Exception as e:
         plog("unhandled exception in main", err=f"{e}")
-        ret: int = 255
+        ret = 255
     sys.exit(ret)
