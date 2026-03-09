@@ -10,23 +10,23 @@ function q() {
 	return qe.value;
 }
 function info() {
-	return document.getElementById('i');
+	return <HTMLElement>document.getElementById('i');
 }
 function working() {
 	info().innerHTML = '<p class=w>Working <img class=l src="/img/loading.gif"></p>';
 }
-function contentEncode(str) {
+function contentEncode(str: string) {
 	var p = document.createElement("p");
 	p.textContent = str;
 	return p.innerHTML;
 }
-function repeat(str, cnt) {
+function repeat(str: string, cnt: number) {
 	let res = '';
 	for (let i = 0; i < cnt; ++i)
 		res += str;
 	return res;
 }
-function buildCodeBlockContent(str) {
+function buildCodeBlockContent(str: string) {
 	str = contentEncode(str);
 	let lines = str.split('\n');
 	let ret = '';
@@ -36,7 +36,7 @@ function buildCodeBlockContent(str) {
 	}
 	return ret;
 }
-function error(msg, r, obj) {
+function error(msg: string, r: XMLHttpRequest | null, obj: any) {
 	console.log('uh-oh');
 	if (obj && obj.fixits && obj.fixits.length > 0) {
 		for (let i = 0; i < obj.fixits.length; ++i) {
@@ -58,8 +58,8 @@ function error(msg, r, obj) {
 	info().innerHTML = msg;
 }
 
-function extractUrls(res) {
-	let urls = {};
+function extractUrls(res: any) {
+	let urls: { [key: string]: string } = {};
 	if (res.epub_url && res.epub_url.length)
 		urls['epub'] = res.epub_url;
 	if (res.html_url && res.html_url.length)
@@ -81,7 +81,7 @@ function extractUrls(res) {
 	return urls;
 }
 
-function explodeNewlines(str) {
+function explodeNewlines(str: string) {
 	while(str.indexOf('\n') >= 0) {
 		str = str.replace('\n', '<br/>');
 	}

@@ -1,6 +1,6 @@
 # Determines whether the fichub.limiter table will be used in general to rate
 # limit based on actual request rate.
-DYNAMIC_RATE_LIMIT = False
+DYNAMIC_RATE_LIMIT: bool = False
 
 # Configuration for static rate limiting (not based on actual request rate).
 # In general this looks like:

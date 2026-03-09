@@ -11,14 +11,14 @@ import fichub_net.authentications as a
 
 def hash_file(fname: Path) -> str:
     with fname.open("rb") as f:
-        data = f.read()
+        data: bytes = f.read()
         return hashlib.md5(data).hexdigest()
 
 
 def req_json(link: str, retry_count: int = 5, timeout: float = 300.0) -> dict[Any, Any]:
-    params = {"apiKey": a.AX_API_KEY}
-    headers = {"User-Agent": "fichub.net/0.1.0"}
-    r = requests.get(
+    params: dict[str, str] = {"apiKey": a.AX_API_KEY}
+    headers: dict[str, str] = {"User-Agent": "fichub.net/0.1.0"}
+    r: requests.Response = requests.get(
         link,
         headers=headers,
         timeout=timeout,
@@ -26,7 +26,7 @@ def req_json(link: str, retry_count: int = 5, timeout: float = 300.0) -> dict[An
         auth=(a.AX_USER, a.AX_PASS),
     )
     try:
-        p = r.json()
+        p: dict | Any = r.json()
     except ValueError:
         if retry_count < 1:
             return {

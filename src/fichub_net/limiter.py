@@ -27,12 +27,12 @@ class Limiter:
         value_: float,
         last_drain_: datetime.datetime,
     ) -> None:
-        self.id = id_
-        self.key = key_
-        self.capacity = capacity_
-        self.flow = flow_
-        self.value = value_
-        self.last_drain = last_drain_
+        self.id: int = id_
+        self.key: str = key_
+        self.capacity: float = capacity_
+        self.flow: float = flow_
+        self.value: float = value_
+        self.last_drain: datetime.datetime = last_drain_
 
     def burst(self) -> float:
         return max(0, self.capacity - self.value)
@@ -55,7 +55,7 @@ class Limiter:
                 """,
                 (key,),
             )
-            r = curs.fetchone()
+            r: tuple | None = curs.fetchone()
             return None if r is None else Limiter.from_row(r)
 
     @staticmethod
@@ -68,7 +68,7 @@ class Limiter:
                 """,
                 (key, DEFAULT_LIMITER_CAPACITY, DEFAULT_LIMITER_FLOW, 0),
             )
-        limiter = Limiter.select(key)
+        limiter: Limiter | None = Limiter.select(key)
         assert limiter is not None
         return limiter
 
@@ -84,18 +84,18 @@ class Limiter:
         return self.refresh()
 
     def refresh(self) -> Limiter:
-        limiter = Limiter.select(self.key)
+        limiter: Limiter | None = Limiter.select(self.key)
         assert limiter is not None
         return limiter
 
     def retry_after(self, value: float) -> float | None:
         with oil.open() as db, db.cursor() as curs:
             curs.execute("select fichub.fill_limiter(%s, %s)", (self.key, value))
-            r = curs.fetchone()
+            r: tuple | None = curs.fetchone()
             if r is None:
                 msg = "Limiter.retryAfter: no fill limit response"
                 raise FillLimiterError(msg)
-            v = float(r[0])
+            v: float = float(r[0])
             if v <= 0:
                 return None
             return v
@@ -106,7 +106,7 @@ class Limiter:
                 "update fichub.limiter set value = value + %s where key = %s returning value",
                 (value, self.key),
             )
-            r = curs.fetchone()
+            r: tuple | None = curs.fetchone()
             if r is None:
                 msg = "Limiter.tick: no tick response"
                 raise MissingLimiterError(msg)

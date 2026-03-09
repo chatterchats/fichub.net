@@ -8,7 +8,6 @@ import json
 import logging
 from logging.handlers import RotatingFileHandler
 import os
-import os.path
 from pathlib import Path
 import resource
 import subprocess
@@ -24,11 +23,9 @@ import psutil
 # for calls to janus service
 import requests
 
-EXPECTED_ARG_COUNT = 3
-USE_LOCAL_CALIBRE = os.environ.get("JANUS_USE_LOCAL_CALIBRE", "false").lower() == "true"
-EBOOK_CONVERT_PATH = os.environ.get(
-    "JANUS_EBOOK_CONVERT_PATH", "/opt/calibre/ebook-convert"
-)
+EXPECTED_ARG_COUNT: int = 3
+USE_LOCAL_CALIBRE: bool = os.environ.get("JANUS_USE_LOCAL_CALIBRE", "false").lower() == "true"
+EBOOK_CONVERT_PATH: str = os.environ.get("JANUS_EBOOK_CONVERT_PATH", "/opt/calibre/ebook-convert")
 
 
 class WaitTimeoutError(Exception):
@@ -39,21 +36,19 @@ def init_logging() -> None:
     if not Path("./log").is_dir():
         Path("./log").mkdir(parents=True)
 
-    file_formatter = logging.Formatter(
-        fmt="%(asctime)s\t%(levelname)s\t%(message)s", datefmt="%s"
-    )
-    file_handler = RotatingFileHandler("./log/janus.log")
+    file_formatter: logging.Formatter = logging.Formatter(fmt="%(asctime)s\t%(levelname)s\t%(message)s", datefmt="%s")
+    file_handler: RotatingFileHandler = RotatingFileHandler("./log/janus.log")
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(file_formatter)
 
-    stream_formatter = logging.Formatter(fmt="%(asctime)s\t%(levelname)s\t%(message)s")
-    stream_handler = logging.StreamHandler(sys.stdout)
+    stream_formatter: logging.Formatter = logging.Formatter(fmt="%(asctime)s\t%(levelname)s\t%(message)s")
+    stream_handler: logging.StreamHandler = logging.StreamHandler(sys.stdout)
     stream_handler.setLevel(logging.DEBUG)
     stream_handler.setFormatter(stream_formatter)
 
     logging.captureWarnings(True)
 
-    root_logger = logging.getLogger()
+    root_logger: logging.Logger = logging.getLogger()
 
     root_logger.addHandler(file_handler)
     root_logger.addHandler(stream_handler)
@@ -62,9 +57,9 @@ def init_logging() -> None:
 
 class LoggingTimer:
     def __init__(self, name: str, args: dict[str, str]) -> None:
-        self.name = name
-        self.args = args
-        self.s = time.time()
+        self.name: str = name
+        self.args: dict[str, str] = args
+        self.s: float = time.time()
 
     def __enter__(self) -> None:
         self.s = time.time()
@@ -75,9 +70,9 @@ class LoggingTimer:
         exc_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
-        e = time.time()
-        d = e - self.s
-        msg = "timing: {}({}) took {}s".format(
+        e: float = time.time()
+        d: float = e - self.s
+        msg: str = "timing: {}({}) took {}s".format(
             self.name, ", ".join([f"{k}={v}" for k, v in self.args.items()]), f"{d:.3f}"
         )
         plog(
@@ -98,11 +93,7 @@ def trace_timing(fspec: list[str]) -> Callable[[Callable[P, T]], Callable[P, T]]
         def wrapped(*args: P.args, **kwargs: P.kwargs) -> T:
             with LoggingTimer(
                 func.__name__,
-                {
-                    k: v
-                    for k, v in inspect.getcallargs(func, *args, **kwargs).items()
-                    if k in fspec
-                },
+                {k: v for k, v in inspect.getcallargs(func, *args, **kwargs).items() if k in fspec},
             ):
                 return func(*args, **kwargs)
 
@@ -112,11 +103,9 @@ def trace_timing(fspec: list[str]) -> Callable[[Callable[P, T]], Callable[P, T]]
 
 
 def plog(msg: str, **kwargs: Any) -> None:
-    msg = json.dumps(
-        {"service": "fichub/janus", "pid": os.getpid(), "msg": msg} | kwargs
-    )
+    msg = json.dumps({"service": "fichub/janus", "pid": os.getpid(), "msg": msg} | kwargs)
 
-    janus_logger = logging.getLogger("janus")
+    janus_logger: logging.Logger = logging.getLogger("janus")
     janus_logger.info(msg)
 
 
@@ -130,15 +119,15 @@ def get_wait_key(cmdline: list[str]) -> str:
 def wait_for_our_turn(key: str) -> None:
     max_other_waiting = 3
     delta = 2.5
-    us_pid = os.getpid()
-    us_created = None
+    us_pid: int = os.getpid()
+    us_created: float = 0.0
     for _i in range(int(180 / delta)):
         cnt = 0
         min_pid: int | None = None
-        min_created = 1.0 * 9e9
+        min_created: float = 1.0 * 9e9
         for p in psutil.process_iter():
             if p.pid == us_pid:
-                us_created = p.create_time()
+                us_created: float = p.create_time()
             cmdl = p.cmdline()
             if (
                 len(cmdl) != (EXPECTED_ARG_COUNT + 1)  # includes python
@@ -152,12 +141,7 @@ def wait_for_our_turn(key: str) -> None:
             if min_pid is None or p.create_time() < min_created:
                 min_pid = p.pid
                 min_created = p.create_time()
-        if (
-            min_created is not None
-            and us_created is not None
-            and min_pid != us_pid
-            and min_created < us_created
-        ):
+        if min_created is not None and us_created is not None and min_pid != us_pid and min_created < us_created:
             if cnt > max_other_waiting:
                 plog(f"there are at least {max_other_waiting} other waiting; aborting")
                 sys.exit(103)
@@ -180,7 +164,7 @@ def limit_virtual_memory() -> None:
 
 
 def convert_local(epub_fname: str, tmp_fname: str) -> int:
-    ret = 255
+    ret: int = 255
     try:
         res = subprocess.run(
             [EBOOK_CONVERT_PATH, epub_fname, tmp_fname],
@@ -197,8 +181,8 @@ def convert_local(epub_fname: str, tmp_fname: str) -> int:
 def convert_janus(epub_fname: str, tmp_fname: str) -> int:
     ret = 255
 
-    input_filename = Path(epub_fname).name
-    output_filename = Path(tmp_fname).name
+    input_filename: str = Path(epub_fname).name
+    output_filename: str = Path(tmp_fname).name
 
     with Path(epub_fname).open("rb") as f:
         content = f.read()
@@ -206,11 +190,11 @@ def convert_janus(epub_fname: str, tmp_fname: str) -> int:
 
     timeout_s = 285.1
     if "CONVERT_TIMEOUT" in os.environ:
-        timeout_s = int(os.environ["CONVERT_TIMEOUT"]) - 10.1
+        timeout_s: float = int(os.environ["CONVERT_TIMEOUT"]) - 10.1
         plog("janus request timeout", timeout_s=timeout_s)
 
     try:
-        r = requests.post(
+        r: requests.Response = requests.post(
             "http://localhost:8001/convert",
             json={
                 "input_filename": input_filename,
@@ -238,10 +222,10 @@ def convert_janus(epub_fname: str, tmp_fname: str) -> int:
 
         r.raise_for_status()
 
-        j = r.json()
+        j: dict | Any = r.json()
 
-        content_b64 = j["content"]
-        content = base64.b64decode(content_b64)
+        content_b64: Any = j["content"]
+        content: bytes = base64.b64decode(content_b64)
         j["content.len"] = len(content)
         del j["content"]
 
@@ -249,7 +233,7 @@ def convert_janus(epub_fname: str, tmp_fname: str) -> int:
         with Path(tmp_fname).open("wb") as f:
             f.write(content)
 
-        ret = j["code"]
+        ret: int = j["code"]
     except Exception as e:
         plog("unhandled exception in convert_janus", err=f"{e}")
     return ret
@@ -259,11 +243,11 @@ def main() -> int:
     if len(sys.argv) != EXPECTED_ARG_COUNT:
         return 1
 
-    epub_fname = str(sys.argv[1])
-    tmp_fname = str(sys.argv[2])
+    epub_fname: str = str(sys.argv[1])
+    tmp_fname: str = str(sys.argv[2])
 
-    us_pid = os.getpid()
-    key = "null"
+    us_pid: int = os.getpid()
+    key: str = "null"
     for p in psutil.process_iter():
         if p.pid == us_pid:
             plog("cmdline", cmdline=p.cmdline())
@@ -274,10 +258,7 @@ def main() -> int:
 
     ret = 255
 
-    if USE_LOCAL_CALIBRE:
-        ret = convert_local(epub_fname, tmp_fname)
-    else:
-        ret = convert_janus(epub_fname, tmp_fname)
+    ret: int = convert_local(epub_fname, tmp_fname) if USE_LOCAL_CALIBRE else convert_janus(epub_fname, tmp_fname)
 
     return ret
 
@@ -285,9 +266,9 @@ def main() -> int:
 if __name__ == "__main__":
     init_logging()
     try:
-        ret = main()
+        ret: int = main()
         plog("returning", ret=ret)
     except Exception as e:
         plog("unhandled exception in main", err=f"{e}")
-        ret = 255
+        ret: int = 255
     sys.exit(ret)
